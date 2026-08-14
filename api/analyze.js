@@ -3,7 +3,7 @@
 // Uses Google Gemini's free tier (vision + JSON mode) to read a nutrition label.
 // GEMINI_API_KEY must be set as an environment variable in the Vercel project — never sent to the client.
 
-const GEMINI_MODEL = "gemini-2.5-flash";
+const GEMINI_MODEL = "gemini-3.5-flash";
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
 
 const SYSTEM_PROMPT =
