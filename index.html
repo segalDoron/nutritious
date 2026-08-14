@@ -831,7 +831,7 @@
   }
 
   function syncActiveStageFromView(){
-    const eligible = stageOrder.filter(stage => (visibleStageRatios.get(stage) || 0) >= 0.15);
+    const eligible = stageOrder.filter(stage => (visibleStageRatios.get(stage) || 0) >= 0.65);
     if(!eligible.length) return;
 
     const stage = scrollDirection === "up" ? eligible[0] : eligible[eligible.length - 1];
@@ -845,7 +845,7 @@
       visibleStageRatios.set(button.dataset.stage, entry.intersectionRatio);
     });
     syncActiveStageFromView();
-  }, { threshold:[0, 0.15, 1] });
+  }, { threshold:[0, 0.65, 1] });
 
   document.querySelectorAll(".rail-step[data-target]").forEach(button=>{
     const section = document.getElementById(button.dataset.target);
