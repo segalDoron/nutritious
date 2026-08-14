@@ -785,13 +785,23 @@
   const el = (tag, cls, html) => { const e=document.createElement(tag); if(cls) e.className=cls; if(html!==undefined) e.innerHTML=html; return e; };
 
   function setStage(name){
+    let activeButton = null;
+
     document.querySelectorAll(".rail-step").forEach(s=>{
       const stage = s.dataset.stage;
       s.classList.remove("active","done");
       const order = ["upload","results","rec","chat"];
       if(order.indexOf(stage) < order.indexOf(name)) s.classList.add("done");
-      if(stage === name) s.classList.add("active");
+      if(stage === name){
+        s.classList.add("active");
+        activeButton = s;
+      }
     });
+
+    // Keep the active navigation item visible inside the horizontal rail.
+    if(activeButton){
+      activeButton.scrollIntoView({behavior:"smooth", block:"nearest", inline:"center"});
+    }
   }
 
   function scrollToSection(section, behavior="smooth"){
@@ -816,7 +826,7 @@
   });
 
   // Keep the navigation state in sync with the section currently entering view.
-  // A section becomes eligible once at least 15% of it is visible. Direction
+  // A section becomes eligible once at least 60% of it is visible. Direction
   // determines which eligible section wins when two sections overlap in view.
   const stageOrder = ["upload","results","rec","chat"];
   const visibleStageRatios = new Map();
@@ -831,7 +841,7 @@
   }
 
   function syncActiveStageFromView(){
-    const eligible = stageOrder.filter(stage => (visibleStageRatios.get(stage) || 0) >= 0.65);
+    const eligible = stageOrder.filter(stage => (visibleStageRatios.get(stage) || 0) >= 0.60);
     if(!eligible.length) return;
 
     const stage = scrollDirection === "up" ? eligible[0] : eligible[eligible.length - 1];
@@ -845,7 +855,7 @@
       visibleStageRatios.set(button.dataset.stage, entry.intersectionRatio);
     });
     syncActiveStageFromView();
-  }, { threshold:[0, 0.65, 1] });
+  }, { threshold:[0, 0.60, 1] });
 
   document.querySelectorAll(".rail-step[data-target]").forEach(button=>{
     const section = document.getElementById(button.dataset.target);
@@ -1041,9 +1051,16 @@
       $("#btn-recommend").disabled = false;
       setStage("rec");
 
-      // reveal chat once a recommendation exists
-      $("#chat-section").classList.add("show");
+      // Reveal chat once a recommendation exists, then move the user to it.
+      const chatSection = $("#chat-section");
+      chatSection.classList.add("show");
       buildChatSuggestions(profile);
+
+      // Wait for the newly revealed section to participate in layout before scrolling.
+      requestAnimationFrame(()=>{
+        setStage("chat");
+        scrollToSection(chatSection);
+      });
     }catch(err){
       $("#loading-rec").classList.remove("show");
       $("#btn-recommend").disabled = false;
