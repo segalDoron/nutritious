@@ -48,7 +48,7 @@ export default async function handler(req, res) {
   const payload = {
     system_instruction: { parts: [{ text: buildSystemPrompt(nutrition, profileLabel) }] },
     contents,
-    generationConfig: { maxOutputTokens: 400, temperature: 0.5 },
+    generationConfig: { maxOutputTokens: 1000, temperature: 0.5, thinkingConfig: { thinkingLevel: "low" } },
   };
 
   try {
@@ -63,7 +63,7 @@ export default async function handler(req, res) {
       const status = r.status === 429 ? 429 : 502;
       return res.status(status).json({
         error: "gemini_error",
-        message: r.status === 429 ? "חרגתם מהמכסה החינמית הזמנית. נסו שוב בעוד דקה." : "שגיאה בקבלת תשובה.",
+        message: r.status === 429 ? "חרגתם מהמכסה החינמית הזמנית. נסו שוב בעוד דקה." : "שגיאה בקבלת תשובה: " + errText.slice(0, 200),
         detail: errText.slice(0, 500),
       });
     }

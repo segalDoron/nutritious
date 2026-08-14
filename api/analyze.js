@@ -47,8 +47,9 @@ export default async function handler(req, res) {
     ],
     generationConfig: {
       responseMimeType: "application/json",
-      maxOutputTokens: 800,
+      maxOutputTokens: 2048,
       temperature: 0.2,
+      thinkingConfig: { thinkingLevel: "low" },
     },
   };
 
@@ -67,7 +68,7 @@ export default async function handler(req, res) {
         message:
           r.status === 429
             ? "חרגתם מהמכסה החינמית הזמנית של Gemini. נסו שוב בעוד דקה."
-            : "שגיאה בשירות הניתוח. נסו שוב.",
+            : "שגיאה בשירות הניתוח: " + errText.slice(0, 200),
         detail: errText.slice(0, 500),
       });
     }
@@ -75,11 +76,22 @@ export default async function handler(req, res) {
     const data = await r.json();
     const text = data?.candidates?.[0]?.content?.parts?.map((p) => p.text || "").join("") || "";
 
+    if (!text.trim()) {
+      const finishReason = data?.candidates?.[0]?.finishReason || "unknown";
+      return res.status(502).json({
+        error: "empty_response",
+        message: "המנתח החזיר תשובה ריקה (סיבה: " + finishReason + "). נסו שוב.",
+      });
+    }
+
     let parsed;
     try {
       parsed = JSON.parse(text);
     } catch {
-      return res.status(502).json({ error: "parse_error", message: "לא הצלחנו לפענח את תשובת המנתח. נסו שוב." });
+      return res.status(502).json({
+        error: "parse_error",
+        message: "לא הצלחנו לפענח את תשובת המנתח: " + text.slice(0, 150),
+      });
     }
 
     return res.status(200).json(parsed);
