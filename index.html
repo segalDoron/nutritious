@@ -79,6 +79,9 @@
 
   /* ---------- Stage rail ---------- */
   .rail{
+    position:sticky;
+    top:24px;
+    z-index:100;
     display:flex;
     gap:6px;
     margin-bottom:26px;
@@ -87,6 +90,7 @@
     border:1px solid var(--line);
     border-radius:999px;
     overflow-x:auto;
+    box-shadow:0 6px 18px -14px rgba(15,43,38,0.55);
   }
   .rail-step{
     flex:1;
@@ -124,9 +128,14 @@
     gap:20px;
   }
   @media(min-width:920px){
-    .grid{grid-template-columns:1.05fr 0.95fr; align-items:start;}
-    .col-left{position:relative;}
-    .col-right{position:sticky; top:20px;}
+    .grid{display:block;}
+    .col-left{position:relative; width:100%;}
+    #chat-section{
+      width:min(440px, calc(50% - 10px));
+      float:left;
+      clear:left;
+    }
+    .col-left::after{content:""; display:block; clear:both;}
   }
 
   /* ---------- Card ---------- */
@@ -705,10 +714,6 @@
         </div>
       </section>
 
-
-    </div>
-
-    <div class="col-right">
       <!-- STEP 4: CHAT -->
       <section class="card" id="chat-section">
         <h2>
@@ -798,12 +803,61 @@
 
   document.querySelectorAll(".rail-step").forEach(button=>{
     button.addEventListener("click", ()=>{
-      const section = document.getElementById(button.dataset.target);
-      if(!section || section.offsetParent === null) return;
+      const targetId = button.dataset.target;
+      const section = targetId ? document.getElementById(targetId) : null;
+
+      // A navigation button only ever controls its own explicit target.
+      // If that step has not been revealed yet, do not scroll anywhere else.
+      if(!section || section.hidden || getComputedStyle(section).display === "none" || section.getClientRects().length === 0) return;
+
       setStage(button.dataset.stage);
       scrollToSection(section);
     });
   });
+
+  // Keep the navigation state in sync with the section currently entering view.
+  // A section becomes eligible once at least 15% of it is visible. Direction
+  // determines which eligible section wins when two sections overlap in view.
+  const stageOrder = ["upload","results","rec","chat"];
+  const visibleStageRatios = new Map();
+  let lastScrollY = window.scrollY;
+  let scrollDirection = "down";
+
+  function isSectionAvailable(section){
+    return !!section &&
+      !section.hidden &&
+      getComputedStyle(section).display !== "none" &&
+      section.getClientRects().length > 0;
+  }
+
+  function syncActiveStageFromView(){
+    const eligible = stageOrder.filter(stage => (visibleStageRatios.get(stage) || 0) >= 0.15);
+    if(!eligible.length) return;
+
+    const stage = scrollDirection === "up" ? eligible[0] : eligible[eligible.length - 1];
+    setStage(stage);
+  }
+
+  const sectionObserver = new IntersectionObserver(entries=>{
+    entries.forEach(entry=>{
+      const button = document.querySelector('.rail-step[data-target="' + entry.target.id + '"]');
+      if(!button) return;
+      visibleStageRatios.set(button.dataset.stage, entry.intersectionRatio);
+    });
+    syncActiveStageFromView();
+  }, { threshold:[0, 0.15, 1] });
+
+  document.querySelectorAll(".rail-step[data-target]").forEach(button=>{
+    const section = document.getElementById(button.dataset.target);
+    if(section) sectionObserver.observe(section);
+  });
+
+  window.addEventListener("scroll", ()=>{
+    const currentY = window.scrollY;
+    if(currentY > lastScrollY) scrollDirection = "down";
+    else if(currentY < lastScrollY) scrollDirection = "up";
+    lastScrollY = currentY;
+  }, {passive:true});
 
   async function postJson(url, body){
     const res = await fetch(url, {
@@ -892,8 +946,7 @@
     }catch(err){
       $("#loading-analyze").classList.remove("show");
       $("#btn-analyze").disabled = false;
-      console.log("err message: ", err.message)
-      showError("error-analyze", "אירעה שגיאה בניתוח התמונה. נסו שוב בעוד רגע.");
+      showError("error-analyze", "אירעה שגיאה בניתוח התמונה. נסו שוב בעוד רגע. (" + err.message + ")");
     }
   });
 
