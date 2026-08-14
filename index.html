@@ -94,12 +94,17 @@
     align-items:center;
     gap:8px;
     padding:9px 14px;
+    border:0;
     border-radius:999px;
+    background:transparent;
+    font-family:var(--font-body);
     font-size:13.5px;
     font-weight:700;
     color:var(--ink-soft);
     white-space:nowrap;
     transition:all .25s ease;
+    cursor:pointer;
+    text-align:right;
   }
   .rail-step .num{
     width:20px;height:20px;border-radius:50%;
@@ -524,10 +529,10 @@
   </header>
 
   <nav class="rail" id="rail">
-    <div class="rail-step active" data-stage="upload"><span class="num">1</span> צילום התווית</div>
-    <div class="rail-step" data-stage="results"><span class="num">2</span> ניתוח נתונים</div>
-    <div class="rail-step" data-stage="rec"><span class="num">3</span> המלצה אישית</div>
-    <div class="rail-step" data-stage="chat"><span class="num">4</span> שיחה על המוצר</div>
+    <button type="button" class="rail-step active" data-stage="upload" data-target="upload-card"><span class="num">1</span> צילום התווית</button>
+    <button type="button" class="rail-step" data-stage="results" data-target="results-section"><span class="num">2</span> ניתוח נתונים</button>
+    <button type="button" class="rail-step" data-stage="rec" data-target="profile-card"><span class="num">3</span> המלצה אישית</button>
+    <button type="button" class="rail-step" data-stage="chat" data-target="chat-section"><span class="num">4</span> שיחה על המוצר</button>
   </nav>
 
   <div class="grid">
@@ -606,33 +611,10 @@
         <p class="note-line" id="analysis-notes"></p>
       </section>
 
-      <!-- STEP 4: CHAT -->
-      <section class="card" id="chat-section">
-        <h2>
-          <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H8l-5 4V6a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v9z"/></svg>
-          שלב 4 · שאלות על המוצר הזה
-        </h2>
-        <p class="sub">הצ'אט מתייחס אך ורק לנתונים שחולצו מהתמונה ולפרופיל שבחרתם — לא לנושאים אחרים.</p>
 
-        <div class="chat-suggestions" id="chat-suggestions"></div>
-        <div class="chat-log" id="chat-log">
-          <div class="chat-empty">שאלו למשל: "כמה יחידות פחמימה יש במנה של 30 גרם?" או "האם המוצר מתאים לי כחטיף בין ארוחות?"</div>
-        </div>
-        <form class="chat-input-row" id="chat-form">
-          <input type="text" id="chat-input" placeholder="כתבו שאלה על המוצר…" autocomplete="off">
-          <button class="btn btn-primary" type="submit" id="chat-send">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg>
-          </button>
-        </form>
-        <p class="locked-note">
-          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>
-          הצ'אט מוגבל לנתוני המוצר המנותח ואינו מהווה ייעוץ רפואי
-        </p>
-      </section>
 
-    </div>
 
-    <div class="col-right">
+
       <!-- STEP 3: PROFILE / RECOMMENDATION -->
       <section class="card" id="profile-card" style="display:none;">
         <h2>
@@ -668,6 +650,34 @@
           <div id="rec-text"></div>
           <div class="disclaimer">⚠️ המידע כאן הוא כללי ולצרכי אוריינות תזונתית בלבד. הוא אינו תחליף לייעוץ של רופא/ה או דיאטן/ית קליני/ת — במיוחד בהיריון או בעת שינוי טיפול תרופתי.</div>
         </div>
+      </section>
+
+
+    </div>
+
+    <div class="col-right">
+      <!-- STEP 4: CHAT -->
+      <section class="card" id="chat-section">
+        <h2>
+          <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H8l-5 4V6a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v9z"/></svg>
+          שלב 4 · שאלות על המוצר הזה
+        </h2>
+        <p class="sub">הצ'אט מתייחס אך ורק לנתונים שחולצו מהתמונה ולפרופיל שבחרתם — לא לנושאים אחרים.</p>
+
+        <div class="chat-suggestions" id="chat-suggestions"></div>
+        <div class="chat-log" id="chat-log">
+          <div class="chat-empty">שאלו למשל: "כמה יחידות פחמימה יש במנה של 30 גרם?" או "האם המוצר מתאים לי כחטיף בין ארוחות?"</div>
+        </div>
+        <form class="chat-input-row" id="chat-form">
+          <input type="text" id="chat-input" placeholder="כתבו שאלה על המוצר…" autocomplete="off">
+          <button class="btn btn-primary" type="submit" id="chat-send">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg>
+          </button>
+        </form>
+        <p class="locked-note">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>
+          הצ'אט מוגבל לנתוני המוצר המנותח ואינו מהווה ייעוץ רפואי
+        </p>
       </section>
     </div>
   </div>
@@ -725,6 +735,15 @@
       if(stage === name) s.classList.add("active");
     });
   }
+
+  document.querySelectorAll(".rail-step").forEach(button=>{
+    button.addEventListener("click", ()=>{
+      const section = document.getElementById(button.dataset.target);
+      if(!section || section.offsetParent === null) return;
+      const heading = section.querySelector("h2") || section;
+      heading.scrollIntoView({ behavior:"smooth", block:"start" });
+    });
+  });
 
   async function postJson(url, body){
     const res = await fetch(url, {
