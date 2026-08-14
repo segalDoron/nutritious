@@ -892,7 +892,8 @@
     }catch(err){
       $("#loading-analyze").classList.remove("show");
       $("#btn-analyze").disabled = false;
-      showError("error-analyze", "אירעה שגיאה בניתוח התמונה. נסו שוב בעוד רגע. (" + err.message + ")");
+      console.log("err message: ", err.message)
+      showError("error-analyze", "אירעה שגיאה בניתוח התמונה. נסו שוב בעוד רגע.");
     }
   });
 
