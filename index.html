@@ -76,6 +76,25 @@
     color:var(--ink-soft);
     font-size:14.5px;
   }
+  .dev-mock-toggle{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    flex:none;
+    margin-inline-start:auto;
+    padding:7px 10px 7px 8px;
+    border:1px dashed var(--amber);
+    border-radius:12px;
+    background:var(--amber-soft);
+    font-size:12px;
+    font-weight:800;
+    color:var(--teal-950);
+    white-space:nowrap;
+  }
+  .dev-mock-toggle[hidden]{display:none !important;}
+  .dev-mock-toggle .switch{width:40px; height:22px;}
+  .dev-mock-toggle .slider:before{height:16px; width:16px;}
+  .dev-mock-toggle input:checked + .slider:before{transform:translateX(-18px);}
 
   /* ---------- Stage rail ---------- */
   .rail{
@@ -596,6 +615,13 @@
       <h1>קראו את התווית</h1>
       <p>צלמו את טבלת הערכים התזונתיים שבגב האריזה, וקבלו חיתוך פחמימות ואנרגיה — עם המלצה מותאמת לרמת סוכרת</p>
     </div>
+    <label class="dev-mock-toggle" id="dev-mock-toggle" hidden>
+      <span>בדיקת ממשק</span>
+      <span class="switch">
+        <input type="checkbox" id="dev-mock-check">
+        <span class="slider"></span>
+      </span>
+    </label>
   </header>
 
   <nav class="rail" id="rail">
@@ -708,7 +734,7 @@
           <label class="opt" data-val="type2"><input type="radio" name="diab" value="type2">סוכרת סוג 2</label>
         </div>
 
-        <div class="pregnant-toggle">
+        <div class="pregnant-toggle" id="pregnant-check">
           <span class="lbl">🤰 בהריון כרגע</span>
           <label class="switch">
             <input type="checkbox" id="pregnant-check">
@@ -802,25 +828,70 @@
   const $ = (sel) => document.querySelector(sel);
   const el = (tag, cls, html) => { const e=document.createElement(tag); if(cls) e.className=cls; if(html!==undefined) e.innerHTML=html; return e; };
 
+  const stageOrder = ["upload","results","rec","chat"];
+  let currentStage = "upload";
+  let stageWalkTimer = null;
+  let programmaticNav = false;
+  let programmaticNavUnlock = null;
+
+  function lockProgrammaticNav(ms){
+    programmaticNav = true;
+    clearTimeout(programmaticNavUnlock);
+    programmaticNavUnlock = setTimeout(()=>{ programmaticNav = false; }, ms);
+  }
+
+  function keepRailButtonInView(button){
+    const rail = button && button.closest(".rail");
+    if(!rail) return;
+    const railRect = rail.getBoundingClientRect();
+    const btnRect = button.getBoundingClientRect();
+    const overflowLeft = btnRect.left - railRect.left - 6;
+    const overflowRight = btnRect.right - railRect.right + 6;
+    if(overflowLeft < 0) rail.scrollLeft += overflowLeft;
+    else if(overflowRight > 0) rail.scrollLeft += overflowRight;
+  }
+
   function setStage(name){
+    currentStage = name;
     let activeButton = null;
 
     document.querySelectorAll(".rail-step").forEach(s=>{
       const stage = s.dataset.stage;
       s.classList.remove("active","done");
-      const order = ["upload","results","rec","chat"];
-      if(order.indexOf(stage) < order.indexOf(name)) s.classList.add("done");
+      if(stageOrder.indexOf(stage) < stageOrder.indexOf(name)) s.classList.add("done");
       if(stage === name){
         s.classList.add("active");
         activeButton = s;
       }
     });
 
-    // Keep the active item visible without resetting the horizontal rail position.
-    // inline:"nearest" scrolls only as far as needed from the rail's current position.
-    if(activeButton){
-      activeButton.scrollIntoView({behavior:"smooth", block:"nearest", inline:"nearest"});
+    keepRailButtonInView(activeButton);
+  }
+
+  function walkStageTo(target, onDone){
+    clearTimeout(stageWalkTimer);
+    const from = stageOrder.indexOf(currentStage);
+    const to = stageOrder.indexOf(target);
+    if(from === -1 || to === -1 || from === to){
+      setStage(target);
+      if(onDone) onDone();
+      return;
     }
+
+    const step = from < to ? 1 : -1;
+    let i = from + step;
+
+    function tick(){
+      setStage(stageOrder[i]);
+      if(i === to){
+        if(onDone) onDone();
+        return;
+      }
+      i += step;
+      stageWalkTimer = setTimeout(tick, 160);
+    }
+
+    tick();
   }
 
   function checkIsMobile() {
@@ -844,6 +915,7 @@
     const padding = isMobile ? 96 : 64;
     const heading = section.querySelector("h2, h3") || section;
     const top = heading.getBoundingClientRect().top + window.scrollY - padding;
+    lockProgrammaticNav(behavior === "smooth" ? 1200 : 200);
     window.scrollTo({ top:Math.max(0, top), behavior });
   }
 
@@ -856,15 +928,16 @@
       // If that step has not been revealed yet, do not scroll anywhere else.
       if(!section || section.hidden || getComputedStyle(section).display === "none" || section.getClientRects().length === 0) return;
 
-      setStage(button.dataset.stage);
-      scrollToSection(section);
+      const targetStage = button.dataset.stage;
+      const steps = Math.abs(stageOrder.indexOf(targetStage) - stageOrder.indexOf(currentStage));
+      lockProgrammaticNav(1200 + steps * 160);
+      walkStageTo(targetStage, ()=> scrollToSection(section));
     });
   });
 
   // Keep the navigation state in sync with the section currently entering view.
   // A section becomes eligible once at least 60% of it is visible. Direction
   // determines which eligible section wins when two sections overlap in view.
-  const stageOrder = ["upload","results","rec","chat"];
   const visibleStageRatios = new Map();
   let lastScrollY = window.scrollY;
   let scrollDirection = "down";
@@ -877,6 +950,7 @@
   }
 
   function syncActiveStageFromView(){
+    if(programmaticNav) return;
     const eligible = stageOrder.filter(stage => (visibleStageRatios.get(stage) || 0) >= 0.60);
     if(!eligible.length) return;
 
@@ -961,6 +1035,32 @@
   function showError(id, msg){ const e=$("#"+id); e.textContent = msg; e.classList.add("show"); }
   function hideError(id){ const e=$("#"+id); e.classList.remove("show"); e.textContent=""; }
 
+  function resetDownstreamAnalysis(){
+    state.nutrition = null;
+    state.chatHistory = [];
+
+    $("#results-section").classList.remove("show");
+    $("#product-name").textContent = "";
+    $("#confidence-tag").textContent = "";
+    $("#gauge-val").textContent = "—";
+    $("#energy-val").textContent = "—";
+    $("#gauge-ring").innerHTML = "";
+    $("#nutrient-grid").innerHTML = "";
+    $("#analysis-notes").textContent = "";
+
+    $("#profile-card").style.display = "none";
+    $("#rec-box").classList.remove("show");
+    $("#rec-text").textContent = "";
+    hideError("error-rec");
+
+    $("#chat-section").classList.remove("show");
+    $("#chat-suggestions").innerHTML = "";
+    $("#chat-input").value = "";
+    $("#chat-log").innerHTML = '<div class="chat-empty">שאלו למשל: "כמה יחידות פחמימה יש במנה של 30 גרם?" או "האם המוצר מתאים לי כחטיף בין ארוחות?"</div>';
+
+    setStage("upload");
+  }
+
   // ---------- Analyze image ----------
   $("#btn-analyze").addEventListener("click", async ()=>{
     if(!state.imageBase64){
@@ -969,14 +1069,8 @@
     }
     hideError("error-analyze");
 
-    // A new analysis invalidates all downstream UI until the fresh response arrives.
-    state.nutrition = null;
-    state.chatHistory = [];
-    $("#results-section").classList.remove("show");
-    $("#profile-card").style.display = "none";
-    $("#rec-box").classList.remove("show");
-    $("#chat-section").classList.remove("show");
-    setStage("upload");
+    // A new analysis invalidates all downstream data and UI until the fresh response arrives.
+    resetDownstreamAnalysis();
 
     $("#btn-analyze").classList.add("is-loading");
     $("#btn-analyze").disabled = true;
@@ -1179,6 +1273,72 @@
     e.preventDefault();
     sendChat($("#chat-input").value);
   });
+
+  // ---------- Dev-only mock UI (never shown in production) ----------
+  function isNonProduction(){
+    const host = location.hostname;
+    return !host || host === "localhost" || host === "127.0.0.1" || host.includes("-git-");
+  }
+
+  const MOCK_NUTRITION = {
+    found: true,
+    product_name_guess: "יוגורט יווני 5% שומן",
+    confidence: "high",
+    energy_kcal_100g: 97,
+    carbs_g_100g: 3.8,
+    sugars_g_100g: 3.6,
+    fiber_g_100g: 0,
+    fat_g_100g: 5,
+    protein_g_100g: 9,
+    sodium_mg_100g: 36,
+    notes: "נתוני דמה לבדיקת ממשק — לא נקראו מתווית אמיתית."
+  };
+
+  const MOCK_REC_TEXT =
+    "ליוגורט הזה יש מעט פחמימות יחסית לחלבון, ולכן הוא יכול להתאים כחטיף בין ארוחות. " +
+    "כדאי להעדיף מנה של כ-150 גרם ולא לשלב עם דבש או פרי מרוכז. " +
+    "אם יש נטייה לעליית סוכר אחרי מוצרי חלב, בדקו תגובה אישית.";
+
+  function applyMockUi(){
+    state.nutrition = MOCK_NUTRITION;
+    state.chatHistory = [
+      {role:"user", content:"כמה פחמימות במנה של 30 גרם?"},
+      {role:"assistant", content:"ב-30 גרם יש בערך 1.1 גרם פחמימות, לפי 3.8 גרם ל-100 גרם."}
+    ];
+
+    renderResults(MOCK_NUTRITION);
+    $("#results-section").classList.add("show");
+    $("#profile-card").style.display = "block";
+    $("#rec-text").textContent = MOCK_REC_TEXT;
+    $("#rec-box").classList.add("show");
+    hideError("error-rec");
+
+    $("#chat-section").classList.add("show");
+    buildChatSuggestions(currentProfileLabel());
+    $("#chat-log").innerHTML = "";
+    appendMsg("user", state.chatHistory[0].content);
+    appendMsg("bot", state.chatHistory[1].content);
+    setStage("results");
+  }
+
+  function clearMockUi(){
+    resetDownstreamAnalysis();
+  }
+
+  if(isNonProduction()){
+    const toggleWrap = $("#dev-mock-toggle");
+    const toggle = $("#dev-mock-check");
+    toggleWrap.hidden = false;
+    if(sessionStorage.getItem("dev-mock-ui") === "1"){
+      toggle.checked = true;
+      applyMockUi();
+    }
+    toggle.addEventListener("change", ()=>{
+      sessionStorage.setItem("dev-mock-ui", toggle.checked ? "1" : "0");
+      if(toggle.checked) applyMockUi();
+      else clearMockUi();
+    });
+  }
 
 })();
 </script>
