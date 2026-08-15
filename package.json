@@ -2,7 +2,8 @@
   "name": "nutrition-label-analyzer",
   "version": "1.0.0",
   "private": true,
-  "description": "Upload/photograph a nutrition label, get a carbs & energy breakdown per 100g, and diabetes-aware guidance — powered by Google Gemini's free tier.",
+  "type": "module",
+  "description": "Upload/photograph a nutrition label, get a carbs & energy breakdown per 100g, and diabetes-aware guidance — powered by Google Gemini's free tier, with a Groq free-tier fallback.",
   "scripts": {
     "dev": "vercel dev"
   }

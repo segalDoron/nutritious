@@ -1,8 +1,16 @@
 // POST /api/recommend
 // body: { nutrition: {...}, profileLabel: string }
+//
+// Fallback chain (all free, no card required anywhere):
+// 1. gemini-3.5-flash-lite  — separate free-tier quota bucket from the vision models in analyze.js
+// 2. gemma-3-27b-it         — served through the same Gemini API key, its own separate quota bucket
+// 3. Groq (llama-3.3-70b)   — a different, independent free provider (only used if GEMINI_API_KEY's
+//                              models are all exhausted). Optional: set GROQ_API_KEY to enable it.
 
-const GEMINI_MODEL = "gemini-3.5-flash";
-const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
+import { callGeminiChain } from "../lib/gemini.js";
+import { callGroqFallback } from "../lib/groq.js";
+
+const MODEL_CHAIN = ["gemini-3.5-flash-lite", "gemma-3-27b-it"];
 
 const SYSTEM_PROMPT =
   "אתה עוזר אוריינות תזונתית עבור אנשים עם סוכרת. אתה נותן מידע כללי בלבד, לא ייעוץ רפואי מחייב ולא אבחון. " +
@@ -15,11 +23,6 @@ function fmt(v, unit) {
 export default async function handler(req, res) {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "method_not_allowed" });
-  }
-
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    return res.status(500).json({ error: "missing_api_key", message: "GEMINI_API_KEY לא מוגדר בהגדרות הפרויקט ב-Vercel." });
   }
 
   const { nutrition, profileLabel } = req.body || {};
@@ -35,33 +38,32 @@ export default async function handler(req, res) {
     "כתוב המלצה קצרה ומעשית: האם ובאיזו זהירות לצרוך את המוצר, מה כדאי לשים לב אליו " +
     "(למשל גודל מנה, שילוב עם חלבון/סיבים), והזכר בעדינות שמדובר במידע כללי בלבד.";
 
-  const payload = {
-    system_instruction: { parts: [{ text: SYSTEM_PROMPT }] },
-    contents: [{ role: "user", parts: [{ text: userMsg }] }],
-    generationConfig: { maxOutputTokens: 1200, temperature: 0.5, thinkingConfig: { thinkingLevel: "low" } },
-  };
-
+  // 1 & 2: Gemini chain
   try {
-    const r = await fetch(`${GEMINI_URL}?key=${apiKey}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
+    const { text } = await callGeminiChain({
+      models: MODEL_CHAIN,
+      systemPrompt: SYSTEM_PROMPT,
+      contents: [{ role: "user", parts: [{ text: userMsg }] }],
+      generationConfig: { maxOutputTokens: 1200, temperature: 0.5, thinkingConfig: { thinkingLevel: "low" } },
     });
-
-    if (!r.ok) {
-      const errText = await r.text();
-      const status = r.status === 429 ? 429 : 502;
-      return res.status(status).json({
-        error: "gemini_error",
-        message: r.status === 429 ? "חרגתם מהמכסה החינמית הזמנית. נסו שוב בעוד דקה." : "שגיאה בהפקת ההמלצה: " + errText.slice(0, 200),
-        detail: errText.slice(0, 500),
+    return res.status(200).json({ text });
+  } catch (geminiErr) {
+    if (geminiErr.code === "missing_api_key") {
+      return res.status(500).json({ error: "missing_api_key", message: geminiErr.message });
+    }
+    // 3: Groq fallback (only if configured)
+    try {
+      const { text } = await callGroqFallback({
+        systemPrompt: SYSTEM_PROMPT,
+        messages: [{ role: "user", content: userMsg }],
+        maxTokens: 500,
+      });
+      return res.status(200).json({ text, provider: "groq_fallback" });
+    } catch (groqErr) {
+      return res.status(429).json({
+        error: "all_providers_exhausted",
+        message: "כל המקורות החינמיים עמוסים כרגע. נסו שוב בעוד כמה דקות.",
       });
     }
-
-    const data = await r.json();
-    const text = data?.candidates?.[0]?.content?.parts?.map((p) => p.text || "").join("").trim() || "";
-    return res.status(200).json({ text });
-  } catch (err) {
-    return res.status(500).json({ error: "server_error", message: "שגיאת שרת. נסו שוב.", detail: String(err) });
   }
 }

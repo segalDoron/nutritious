@@ -1,8 +1,21 @@
 // POST /api/chat
 // body: { nutrition: {...}, profileLabel: string, history: [{role:'user'|'assistant', content:string}], message: string }
+//
+// This endpoint deliberately does NOT call Gemini. Gemini's free-tier quota is reserved entirely
+// for /api/analyze.js (the image analysis step), which is the heaviest and most important call —
+// it's the one thing nothing else here can substitute for. Chat is a simple back-and-forth about
+// data that's already been extracted, so a lighter free provider is plenty.
+//
+// Fallback chain for this endpoint (both free, no card required):
+// 1. OpenRouter (free auto-router) — an independent free provider, rotates across whichever open
+//    model is currently free there. Requires OPENROUTER_API_KEY.
+// 2. Groq (llama-3.3-70b) — a second, independent free provider, tried if OpenRouter is unset or
+//    exhausted. Requires GROQ_API_KEY.
+//
+// At least one of the two keys must be set for chat to work.
 
-const GEMINI_MODEL = "gemini-3.5-flash";
-const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
+import { callOpenRouterFallback } from "../lib/openrouter.js";
+import { callGroqFallback } from "../lib/groq.js";
 
 function fmt(v, unit) {
   return v === null || v === undefined ? "לא ידוע" : `${v}${unit ? " " + unit : ""}`;
@@ -27,9 +40,11 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: "method_not_allowed" });
   }
 
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    return res.status(500).json({ error: "missing_api_key", message: "GEMINI_API_KEY לא מוגדר בהגדרות הפרויקט ב-Vercel." });
+  if (!process.env.OPENROUTER_API_KEY && !process.env.GROQ_API_KEY) {
+    return res.status(500).json({
+      error: "missing_api_key",
+      message: "הצ'אט דורש לפחות אחד מהמפתחות OPENROUTER_API_KEY או GROQ_API_KEY בהגדרות הפרויקט ב-Vercel.",
+    });
   }
 
   const { nutrition, profileLabel, history, message } = req.body || {};
@@ -37,41 +52,26 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: "missing_message", message: "לא נשלחה שאלה." });
   }
 
-  const contents = [
-    ...(Array.isArray(history) ? history : []).map((m) => ({
-      role: m.role === "assistant" ? "model" : "user",
-      parts: [{ text: m.content }],
-    })),
-    { role: "user", parts: [{ text: message }] },
-  ];
+  const priorTurns = Array.isArray(history) ? history : [];
+  const systemPrompt = buildSystemPrompt(nutrition, profileLabel);
+  const chatMessages = [...priorTurns, { role: "user", content: message }];
 
-  const payload = {
-    system_instruction: { parts: [{ text: buildSystemPrompt(nutrition, profileLabel) }] },
-    contents,
-    generationConfig: { maxOutputTokens: 1000, temperature: 0.5, thinkingConfig: { thinkingLevel: "low" } },
-  };
-
+  // Tier 1: OpenRouter free router
   try {
-    const r = await fetch(`${GEMINI_URL}?key=${apiKey}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
+    const { text } = await callOpenRouterFallback({ systemPrompt, messages: chatMessages, maxTokens: 400 });
+    return res.status(200).json({ reply: text, provider: "openrouter" });
+  } catch (openrouterErr) {
+    // fall through to Groq
+  }
+
+  // Tier 2: Groq
+  try {
+    const { text } = await callGroqFallback({ systemPrompt, messages: chatMessages, maxTokens: 400 });
+    return res.status(200).json({ reply: text, provider: "groq" });
+  } catch (groqErr) {
+    return res.status(429).json({
+      error: "all_providers_exhausted",
+      message: "כל המקורות החינמיים עמוסים כרגע. נסו שוב בעוד כמה דקות.",
     });
-
-    if (!r.ok) {
-      const errText = await r.text();
-      const status = r.status === 429 ? 429 : 502;
-      return res.status(status).json({
-        error: "gemini_error",
-        message: r.status === 429 ? "חרגתם מהמכסה החינמית הזמנית. נסו שוב בעוד דקה." : "שגיאה בקבלת תשובה: " + errText.slice(0, 200),
-        detail: errText.slice(0, 500),
-      });
-    }
-
-    const data = await r.json();
-    const text = data?.candidates?.[0]?.content?.parts?.map((p) => p.text || "").join("").trim() || "";
-    return res.status(200).json({ reply: text });
-  } catch (err) {
-    return res.status(500).json({ error: "server_error", message: "שגיאת שרת. נסו שוב.", detail: String(err) });
   }
 }
