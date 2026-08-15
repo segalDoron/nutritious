@@ -823,10 +823,27 @@
     }
   }
 
+  function checkIsMobile() {
+    // 1. Check if the device uses a finger/touchscreen instead of a mouse
+    const isTouchDevice = window.matchMedia("(pointer: coarse)").matches;
+
+    // 2. Scan the browser identity string for mobile keywords
+    const ua = navigator.userAgent || navigator.vendor || window.opera;
+    const hasMobileUA = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua);
+
+    // 3. Screen width check (Matches your CSS: anything under 920px is mobile)
+    const isMobileScreen = window.innerWidth < 920;
+
+    // Returns true if it has touch AND matches the mobile width or mobile identity string
+    return isMobileScreen || (isTouchDevice && hasMobileUA);
+}
+
   function scrollToSection(section, behavior="smooth"){
     if(!section) return;
+    isMobile = checkIsMobile();
+    const padding = isMobile ? 64 : 40;
     const heading = section.querySelector("h2, h3") || section;
-    const top = heading.getBoundingClientRect().top + window.scrollY - 24;
+    const top = heading.getBoundingClientRect().top + window.scrollY - 40;
     window.scrollTo({ top:Math.max(0, top), behavior });
   }
 
