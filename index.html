@@ -841,9 +841,9 @@
   function scrollToSection(section, behavior="smooth"){
     if(!section) return;
     const isMobile = checkIsMobile();
-    const padding = isMobile ? 64 : 40;
+    const padding = isMobile ? 64 : 56;
     const heading = section.querySelector("h2, h3") || section;
-    const top = heading.getBoundingClientRect().top + window.scrollY - 40;
+    const top = heading.getBoundingClientRect().top + window.scrollY - padding;
     window.scrollTo({ top:Math.max(0, top), behavior });
   }
 
